@@ -85,17 +85,20 @@ int main(int argc, char **argv)
 	/* create two vectors with random elements */
 	std::vector<int> v1(size);
 	std::vector<int> v2(size);
+	std::vector<int> v3(size);
 	
 	std::mt19937 rg;
 	std::uniform_int_distribution<int> rd(1,mod);
 	for(size_t i=0;i<size;i++) {
 		v1[i] = rd(rg);
 		v2[i] = rd(rg);
+		v3[i] = rd(rg);
 	}
 	
 	/* create copies for different algorithms */
 	std::vector<int> c1 = v1; /* note: v1 and v2 are not modified during the tests */
 	std::vector<int> c2 = v2; /* so it is easy to add more tests at the end */
+	std::vector<int> c3 = v3;
 	std::vector<std::pair<int,int> > p1(size);
 	std::vector<std::pair<int,int> > p2;
 	
@@ -142,6 +145,18 @@ int main(int argc, char **argv)
 		fprintf(stderr,"Error comparing using operator ->()!\n");
 		return 1;
 	}
+	/* test iterating over with range-for syntax */
+	{
+		size_t i = 0;
+		for( auto x : zi::make_const_zip_range(c1,c2) ) {
+			/* note: x is std::pair<const int&, const int&> */
+			if(x.first != p1[i].first || x.second != p1[i].second) {
+				fprintf(stderr,"Error comparing using range-for!\n");
+				return 1;
+			}
+			i++;
+		}
+	}
 	
 	
 	/* sort vectors */
@@ -164,10 +179,57 @@ int main(int argc, char **argv)
 		return 1;
 	}
 	
+	
+	/* create a nested zip_iterators, use those to copy vector elements */
+	{
+		auto it1 = zi::make_zip_it( zi::make_zip_it(v1.begin(),v2.begin()), zi::make_zip_it(c1.rbegin(),c2.rbegin()) );
+		auto it2 = zi::make_zip_it( zi::make_zip_it(v1.end(),v2.end()), zi::make_zip_it(c1.rend(),c2.rend()) );
+		auto it3 = zi::make_zip_it( p1.begin(), p2.begin() );
+		for(; it1 != it2; ++it1, ++it3) {
+			it3->first = it1->first;
+			it3->second = it1->second;
+			/* or potentially use *it3 = *it1; ?? */
+		}
+	}
+	{
+		/* test using const zip_iterators */
+		auto it1 = zi::make_zip_it( zi::make_zip_it(v1.cbegin(),v2.cbegin()), zi::make_zip_it(c1.crbegin(),c2.crbegin()) );
+		auto it2 = zi::make_zip_it( zi::make_zip_it(v1.cend(),v2.cend()), zi::make_zip_it(c1.crend(),c2.crend()) );
+		auto it3 = zi::make_zip_it( p1.cbegin(), p2.cbegin() );
+		for(; it1 != it2; ++it1, ++it3) {
+			if( !(it1->first == it3->first && it1->second == it3->second)  ) {
+				fprintf(stderr,"Error comparing using nested iterators!\n");
+				return 1;
+			}
+		}
+		
+		/* test the result using indices */
+		/* p1 should be the same as {v1,v2}, while p2 should be the reverse of {c1,c2} */
+		for(size_t i=0;i<size;i++) {
+			if(p1[i].first != v1[i] || p1[i].second != v2[i] ||
+				p2[i].first != c1[size-i-1] || p2[i].second != c2[size-i-1]) {
+					fprintf(stderr,"Error comparing after copying with nested iterators!\n");
+					return 1;
+			}
+		}
+	}
+	
+	/* test modifying using operator ->() */
+	{
+		size_t i = 0;
+		for( auto it0 = zi::make_zip_it(c1.begin(),c2.begin()); it0 != zi::make_zip_it(c1.end(),c2.end()); ++it0 ) {
+			it0->first = v1[i];
+			it0->second = v2[i];
+			i++;
+		}
+		if( ! (cmp_vec(c1,v1) && cmp_vec(c2,v2)) ) {
+			fprintf(stderr,"Error comparing after assigning using operator -> ()!\n");
+			return 1;
+		}
+	}
 	/* test std::sort using zip_it */
-	c1 = v1;
-	c2 = v2;
 	std::sort( zi::make_zip_it(c1.begin(),c2.begin()), zi::make_zip_it(c1.end(),c2.end()) );
+	std::sort(p1.begin(),p1.end()); /* note: p1 was modified before as well */
 	
 	/* copy to paired version and compare */
 	for(size_t i = 0;i<size;i++) p2[i] = std::make_pair(c1[i],c2[i]);
@@ -177,9 +239,21 @@ int main(int argc, char **argv)
 	}
 	
 	
+	/* test modifying using range-for */
+	{
+		size_t i = 0;
+		for( auto x : zi::make_zip_range(c1,c2) ) {
+			x.first = v1[i];
+			x.second = v2[i];
+			i++;
+		}
+		if( ! (cmp_vec(c1,v1) && cmp_vec(c2,v2)) ) {
+			fprintf(stderr,"Error comparing after assigning using range for!\n");
+			return 1;
+		}
+	}
+	
 	/* test std::make_heap and std::sort_heap */
-	c1 = v1;
-	c2 = v2;
 	std::make_heap( zi::make_zip_it(c1.begin(),c2.begin()), zi::make_zip_it(c1.end(),c2.end()) );
 	std::sort_heap( zi::make_zip_it(c1.begin(),c2.begin()), zi::make_zip_it(c1.end(),c2.end()) );
 	/* copy to paired version and compare */
@@ -250,6 +324,37 @@ int main(int argc, char **argv)
 	if(!cmp_vec(p1,p2)) {
 		fprintf(stderr,"Error comparing vectors after std::unique_copy using the first element only!\n");
 		return 1;
+	}
+	
+	
+	/* test sorting three vectors together 
+	 * note that std::sort will not work with the default comparison operators
+	 * but it will work with the lambda below */
+	{
+		c1 = v1; c2 = v2; c3 = v3;
+		std::vector<std::pair<std::pair<int,int>,int> > p3(size);
+		for(size_t i=0;i<size;i++) 
+			p3[i] = std::make_pair(std::make_pair(v1[i],v2[i]),v3[i]);
+		
+		std::sort(p3.begin(),p3.end());
+		std::sort( zi::make_zip_it( zi::make_zip_it(c1.begin(),c2.begin()), c3.begin() ),
+			zi::make_zip_it( zi::make_zip_it(c1.end(),c2.end()), c3.end() ), 
+			[](const auto& x, const auto& y) { return x.first < y.first || (x.first == y.first && x.second < y.second); } );
+		
+		for(size_t i=0;i<size;i++) {
+			if(p3[i].first.first != c1[i] || p3[i].first.second != c2[i] || p3[i].second != c3[i]) {
+				fprintf(stderr,"Error comparing after sorting three vectors together; mismatch at element %lu!\n",i);
+				return 1;
+			}
+		}
+		
+		auto itpair2 = std::mismatch(p3.begin(), p3.end(), zi::make_zip_it( zi::make_zip_it(c1.begin(),c2.begin()), c3.begin() ),
+			[](const auto& x, const auto& y){ return x.first == y.first && x.second == y.second; } );
+		if(itpair2.first != p3.end() || itpair2.second != zi::make_zip_it( zi::make_zip_it(c1.end(),c2.end()), c3.end() ) ) {
+			fprintf(stderr,"Error comparing with std::mismatch after sorting three vectors together at element %lu!\n",
+				itpair2.first - p3.begin());
+			return 1;
+		}
 	}
 	
 	

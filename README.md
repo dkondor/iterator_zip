@@ -19,13 +19,13 @@ After this, zit works mostly like a standard iterator supporting the operations 
 result in a zi::refpair<T1,T2>, which is basically an std::pair<T1&,T2&> -- note that it is actually a pair of references,
 so it can modify to elements pointed to by the original iterators (it1,it2). So e.g.
 ```
-(*zit).first = somevalue;
+zit->first = somevalue;
 ```
 will work. Also, there is a convenience function
 ```
 zit.first()
 ```
-which does the same (unfortunately, zit->first will not work as operator ->() requires an actual lvalue object to work on).
+which does the same.
 
 These iterators should work with STL algorithms, so the following code will sort a pair of vectors and erase duplicate elements:
 ```
@@ -38,7 +38,7 @@ v1.erase( it.get_it1(), v1.end() );
 v2.erase( it.get_it2(), v2.end() );
 ```
 
-Also, there is a test program, which contains some examples for usage. It can be compiled and run:
+Also, there is a test program, which contains some examples for usage. It can be compiled and run as following:
 ```
 g++ -o it_zip_test it_zip_test.cpp -g -std=gnu++14 -Wall
 ./it_zip_test
@@ -70,6 +70,10 @@ std::unique_copy
 	probably the largest potential issue that might result in unexpected behavior. When writing algorithms
 	accepting generic iterators, it is advisable to use std::iterator_traits, but since using auto seems
 	very convenient, this can be an issue.
+- zip_it containing other zip_it will require comparison functions as lambdas passed to some STL algorithms
+	(including std::sort) as the default comparison between nested std::pairs and refpairs cannot be deduced
+	from the templates. On the other hand, writing a simple lambda which uses auto parameters will work.
+	But note that nested zip_its were not thoroughly tested, so there might be further issues.
 
 	
 
