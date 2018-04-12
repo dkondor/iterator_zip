@@ -106,7 +106,9 @@ void swap(refpair<T1,T2>&& p1, refpair<T1,T2>&& p2) {
 /* 2. main iterator class */
 template<class It1, class It2> /* , bool cmp_both = true> */
 struct zip_it : std::iterator< typename std::iterator_traits<It1>::iterator_category,
-		std::pair< typename std::iterator_traits<It1>::value_type, typename std::iterator_traits<It2>::value_type > > {
+		std::pair< typename std::iterator_traits<It1>::value_type, typename std::iterator_traits<It2>::value_type >,
+		ssize_t, refpair< typename std::iterator_traits<It1>::value_type, typename std::iterator_traits<It2>::value_type >*,
+		refpair< typename std::iterator_traits<It1>::value_type, typename std::iterator_traits<It2>::value_type > > {
 	
 	protected:
 		/* just store two iterators -- note: store by value, not reference,
