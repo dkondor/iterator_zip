@@ -5,7 +5,9 @@ The main motivation is to be able to use STL algorithms (e.g. std::sort) on pair
 without having to create a container of std::pairs or similar. This is very similar to
 [zip_iterator in Boost](https://www.boost.org/doc/libs/1_66_0/libs/iterator/doc/zip_iterator.html),
 but with the addition that elements referenced by the iterator are modifiable, so algorithms that modify them will work.
-This is still experimental / work in progress.
+This is still experimental / work in progress. Note that this is probably not possible while satisfying the requirements
+of iterator concepts (mainly that reference types are actually a reference to value types), in practice it seems to work
+and it does not involve undefined behavior AFAIK.
 
 ### Usage
 This is a header-only library, include iterator_zip.h in your project and use the functionality. Note that it requires C++14.
@@ -55,10 +57,13 @@ std::unique_copy
 ```
 
 ### Caveats / gotchas
-- zip_it::reference is NOT a reference to zip_it::value_type. I think this is allowed by the standard but
-	probably not what most people would expect (see the next point). This is required though so that
-	zip_it::reference can contain references to the actual values, while zip_it::value_type can be
-	safely used to copy (/ move) values.
+- zip_it::reference is NOT a reference to zip_it::value_type. This is non standard behavior, as it is
+	only allowed for InputIterators, but not ForwardIterators or anything above that. But in this case,
+	it is required so that zip_it::reference can contain references to the actual values, while
+	zip_it::value_type can be safely used to copy (/ move) values. While this eliminates the main
+	concern why ForwardIterators require to return actual references (so that they can be used to
+	access / modify the referenced elements after incrementing the iterator, which the current setup
+	allows), this is not what most people would expect; see the next point as well.
 - auto x = *zit -- this will NOT copy the values, but create references; don't use this, explicitely declare
 	x as zip_it::value_type (or std::pair<T1,T2>) or zip_it::reference (or the corresponding types obtained
 	with std::iterator_traits) according to your intentions. This is the consequence of the previous and
